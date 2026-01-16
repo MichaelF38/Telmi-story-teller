@@ -37,6 +37,7 @@ static double musicDuration;
 static pthread_t durationThread;
 static bool durationThreadRunning = false;
 static char durationThreadPath[STR_MAX * 2];
+static char currentMusicPath[STR_MAX * 2];
 static TTF_Font *fontBold24;
 static TTF_Font *fontBold20;
 static TTF_Font *fontBold18;
@@ -244,11 +245,14 @@ void video_displayBlackScreen(void) {
 }
 
 void *audio_calculate_duration_thread(void *arg) {
-    Mix_Music *tempMusic = Mix_LoadMUS(durationThreadPath);
+    char pathToCalculate[STR_MAX * 2];
+    strcpy(pathToCalculate, durationThreadPath);
+
+    Mix_Music *tempMusic = Mix_LoadMUS(pathToCalculate);
     if (tempMusic != NULL) {
         double duration = Mix_MusicDuration(tempMusic);
         Mix_FreeMusic(tempMusic);
-        if (music != NULL) {
+        if (strcmp(pathToCalculate, currentMusicPath) == 0) {
             musicDuration = duration;
         }
     }
@@ -261,6 +265,7 @@ void audio_free_music(void) {
         Mix_HaltMusic();
         Mix_FreeMusic(music);
         music = NULL;
+        currentMusicPath[0] = '\0';
     }
 }
 
@@ -286,23 +291,25 @@ bool audio_isFinished(void) {
 }
 
 void audio_play_path(char *soundPath, double position) {
-    if (durationThreadRunning) {
-        pthread_join(durationThread, NULL);
-        durationThreadRunning = false;
-    }
-
     audio_free_music();
     music = Mix_LoadMUS(soundPath);
     if (music != NULL) {
-        musicDuration = -1.0;
+        musicDuration = -1.0;  // Unknown until thread completes
+        strcpy(currentMusicPath, soundPath);
         Mix_PlayMusic(music, 1);
         Mix_SetMusicPosition(position);
+
+        if (durationThreadRunning) {
+            pthread_join(durationThread, NULL);
+            durationThreadRunning = false;
+        }
 
         strcpy(durationThreadPath, soundPath);
         durationThreadRunning = true;
         pthread_create(&durationThread, NULL, audio_calculate_duration_thread, NULL);
     } else {
         musicDuration = 0.0;
+        currentMusicPath[0] = '\0';
     }
 }
 
@@ -340,6 +347,8 @@ void video_audio_init(void) {
 
 
 void video_audio_quit(void) {
+    currentMusicPath[0] = '\0';
+
     if (durationThreadRunning) {
         pthread_join(durationThread, NULL);
         durationThreadRunning = false;

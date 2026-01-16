@@ -43,6 +43,7 @@ static int musicPlayerRepeatMode = MUSICPLAYER_REPEAT_ALL;
 static int musicPlayerDrawInterfaceTime = 0;
 static long int musicPlayerScreenUpdateTime = 0;
 static long int musicPlayerLastActivity = 0;
+static long int musicPlayerMusicLoadTime = 0;
 
 static void (*callback_musicplayer_autoplay)(void);
 
@@ -137,8 +138,12 @@ void musicplayer_interfaceplayer_drawInterface(bool forceDraw) {
     sprintf(writeArtist, "%s - %s", artist, album);
     if (musicDuration > 0) {
         sprintf(writeDuration, "%i:%02i", musicDuration / 60, musicDuration % 60);
-    } else {
+    } else if (get_time() - musicPlayerMusicLoadTime > 1) {
+        // Only show "-:--" after 1 second of waiting (avoids flicker for short songs)
         sprintf(writeDuration, "-:--");
+    } else {
+        // Within first second, show empty to avoid flicker
+        writeDuration[0] = '\0';
     }
     sprintf(writeTime, "%i:%02i", musicPosition / 60, musicPosition % 60);
     sprintf(fileImageName, "%s.png", imageName);
@@ -293,6 +298,7 @@ void musicplayer_load(void) {
     bool isPaused = Mix_PlayingMusic() == 1 && Mix_PausedMusic() == 1;
 
     audio_play(MUSICPLAYER_RESOURCES, musicPlayerTracksList[musicPlayerTrackIndex], musicPlayerTrackPosition);
+    musicPlayerMusicLoadTime = get_time();
 
     if (isPaused) {
         Mix_PauseMusic();
