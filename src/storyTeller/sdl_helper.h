@@ -306,7 +306,9 @@ void audio_play_path(char *soundPath, double position) {
 
         strcpy(durationThreadPath, soundPath);
         durationThreadRunning = true;
-        pthread_create(&durationThread, NULL, audio_calculate_duration_thread, NULL);
+        if (pthread_create(&durationThread, NULL, audio_calculate_duration_thread, NULL) != 0) {
+            durationThreadRunning = false; 
+        }
     } else {
         musicDuration = 0.0;
         currentMusicPath[0] = '\0';
