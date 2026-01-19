@@ -594,10 +594,15 @@ void stories_drawTimeline(bool forceDraw) {
 
     char strCurrentStoryTime[16], strTotalStoryTime[16];
     sprintf(strCurrentStoryTime, "%i:%02i", storyPosition / 60, storyPosition % 60);
-    sprintf(strTotalStoryTime, "%i:%02i", storyDuration / 60, storyDuration % 60);
-
+    if(storyDuration > 0) {
+        sprintf(strTotalStoryTime, "%i:%02i", storyDuration / 60, storyDuration % 60);
+    } else {
+        sprintf(strTotalStoryTime, "-:--");
+    }
     video_screenBlack();
-    video_drawRectangle(80, 217, (int) (((double) storyPosition / (double) storyDuration) * 479.0), 19, 255, 186, 0);
+    if(storyDuration > 0) {
+        video_drawRectangle(80, 217, (int) (((double) storyPosition / (double) storyDuration) * 479.0), 19, 255, 186, 0);
+    }
     video_screenAddImage(SYSTEM_RESOURCES, "storytellerStoryPlayer.png", 61, 203, 518);
     if (Mix_PausedMusic() == 1) {
         video_screenAddImage(SYSTEM_RESOURCES, "storytellerPause.png", 308, 245, 24);
@@ -1057,7 +1062,7 @@ void stories_down(void) {
 void stories_rewind(double time) {
     storyTime = audio_getPosition() + time;
     double audioDuration = audio_getDuration();
-    if (storyTime > audioDuration) {
+    if (audioDuration > 0 && storyTime >= audioDuration) {
         if (callback_stories_audio_hook != NULL) {
             callback_stories_audio_hook();
             return;
@@ -1243,7 +1248,7 @@ void stories_reset(void) {
 }
 
 bool stories_callCallback(void) {
-    if (callback_stories_audio_hook != NULL && audio_getPosition() == audio_getDuration()) {
+    if (callback_stories_audio_hook != NULL && audio_isFinished()) {
         callback_stories_audio_hook();
         return true;
     }

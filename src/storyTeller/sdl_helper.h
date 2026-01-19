@@ -34,6 +34,7 @@ static SDL_Texture *texture = NULL;
 static SDL_Renderer *renderer = NULL;
 static Mix_Music *music;
 static double musicDuration;
+static pthread_mutex_t durationThreadMutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_t durationThread;
 static bool durationThreadRunning = false;
 static char durationThreadPath[STR_MAX * 2];
@@ -246,18 +247,29 @@ void video_displayBlackScreen(void) {
 
 void *audio_calculate_duration_thread(void *arg) {
     char pathToCalculate[STR_MAX * 2];
+    pthread_mutex_lock(&durationThreadMutex);
     strcpy(pathToCalculate, durationThreadPath);
-
+    pthread_mutex_unlock(&durationThreadMutex);
     Mix_Music *tempMusic = Mix_LoadMUS(pathToCalculate);
     if (tempMusic != NULL) {
         double duration = Mix_MusicDuration(tempMusic);
         Mix_FreeMusic(tempMusic);
+        pthread_mutex_lock(&durationThreadMutex);
         if (strcmp(pathToCalculate, currentMusicPath) == 0) {
             musicDuration = duration;
         }
+        durationThreadRunning = false;
+        pthread_mutex_unlock(&durationThreadMutex);
+    } else {
+        pthread_mutex_lock(&durationThreadMutex);
+        durationThreadRunning = false;
+        pthread_mutex_unlock(&durationThreadMutex);
     }
-    durationThreadRunning = false;
     return NULL;
+}
+
+bool audio_isFinished(void) {
+    return music == NULL || Mix_PlayingMusic() == 0;
 }
 
 void audio_free_music(void) {
@@ -265,12 +277,14 @@ void audio_free_music(void) {
         Mix_HaltMusic();
         Mix_FreeMusic(music);
         music = NULL;
+        pthread_mutex_lock(&durationThreadMutex);
         currentMusicPath[0] = '\0';
+        pthread_mutex_unlock(&durationThreadMutex);
     }
 }
 
 void audio_setPosition(double position) {
-    if (music != NULL && Mix_PlayingMusic() == 1) {
+    if (!audio_isFinished()) {
         Mix_SetMusicPosition(position);
     }
 }
@@ -286,32 +300,43 @@ double audio_getPosition(void) {
     return 0.0;
 }
 
-bool audio_isFinished(void) {
-    return music != NULL && Mix_PlayingMusic() == 0;
-}
-
 void audio_play_path(char *soundPath, double position) {
+    pthread_mutex_lock(&durationThreadMutex);
+    bool isThreadRunning = durationThreadRunning;
+    pthread_mutex_unlock(&durationThreadMutex);
+
+    if (isThreadRunning) {
+        pthread_join(durationThread, NULL);
+        pthread_mutex_lock(&durationThreadMutex);
+        durationThreadRunning = false;
+        pthread_mutex_unlock(&durationThreadMutex);
+    }
+
     audio_free_music();
     music = Mix_LoadMUS(soundPath);
     if (music != NULL) {
-        musicDuration = -1.0;  // Unknown until thread completes
+        pthread_mutex_lock(&durationThreadMutex);
+        musicDuration = -1.0;
         strcpy(currentMusicPath, soundPath);
+        pthread_mutex_unlock(&durationThreadMutex);
+
         Mix_PlayMusic(music, 1);
         Mix_SetMusicPosition(position);
 
-        if (durationThreadRunning) {
-            pthread_join(durationThread, NULL);
-            durationThreadRunning = false;
-        }
-
+        pthread_mutex_lock(&durationThreadMutex);
         strcpy(durationThreadPath, soundPath);
         durationThreadRunning = true;
+        pthread_mutex_unlock(&durationThreadMutex);
         if (pthread_create(&durationThread, NULL, audio_calculate_duration_thread, NULL) != 0) {
-            durationThreadRunning = false; 
+            pthread_mutex_lock(&durationThreadMutex);
+            durationThreadRunning = false;
+            pthread_mutex_unlock(&durationThreadMutex);
         }
     } else {
+        pthread_mutex_lock(&durationThreadMutex);
         musicDuration = 0.0;
         currentMusicPath[0] = '\0';
+        pthread_mutex_unlock(&durationThreadMutex);
     }
 }
 
@@ -349,12 +374,18 @@ void video_audio_init(void) {
 
 
 void video_audio_quit(void) {
-    currentMusicPath[0] = '\0';
+    pthread_mutex_lock(&durationThreadMutex);
+    bool isThreadRunning = durationThreadRunning;
+    pthread_mutex_unlock(&durationThreadMutex);
 
-    if (durationThreadRunning) {
+    if (isThreadRunning) {
         pthread_join(durationThread, NULL);
-        durationThreadRunning = false;
     }
+
+    pthread_mutex_lock(&durationThreadMutex);
+    durationThreadRunning = false;
+    currentMusicPath[0] = '\0';
+    pthread_mutex_unlock(&durationThreadMutex);
 
     TTF_Quit();
 
