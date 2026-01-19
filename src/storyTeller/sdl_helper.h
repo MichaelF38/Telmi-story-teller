@@ -2,6 +2,7 @@
 #define STORYTELLER_SDL_HELPER__
 
 #include <math.h>
+#include <pthread.h>
 
 #include "SDL2/SDL.h"
 #include "SDL2/SDL_mixer.h"
@@ -33,6 +34,10 @@ static SDL_Texture *texture = NULL;
 static SDL_Renderer *renderer = NULL;
 static Mix_Music *music;
 static double musicDuration;
+static pthread_t durationThread;
+static bool durationThreadRunning = false;
+static char durationThreadPath[STR_MAX * 2];
+static char currentMusicPath[STR_MAX * 2];
 static TTF_Font *fontBold24;
 static TTF_Font *fontBold20;
 static TTF_Font *fontBold18;
@@ -239,11 +244,28 @@ void video_displayBlackScreen(void) {
     video_applyToVideo();
 }
 
+void *audio_calculate_duration_thread(void *arg) {
+    char pathToCalculate[STR_MAX * 2];
+    strcpy(pathToCalculate, durationThreadPath);
+
+    Mix_Music *tempMusic = Mix_LoadMUS(pathToCalculate);
+    if (tempMusic != NULL) {
+        double duration = Mix_MusicDuration(tempMusic);
+        Mix_FreeMusic(tempMusic);
+        if (strcmp(pathToCalculate, currentMusicPath) == 0) {
+            musicDuration = duration;
+        }
+    }
+    durationThreadRunning = false;
+    return NULL;
+}
+
 void audio_free_music(void) {
     if (music != NULL) {
         Mix_HaltMusic();
         Mix_FreeMusic(music);
         music = NULL;
+        currentMusicPath[0] = '\0';
     }
 }
 
@@ -264,15 +286,32 @@ double audio_getPosition(void) {
     return 0.0;
 }
 
+bool audio_isFinished(void) {
+    return music != NULL && Mix_PlayingMusic() == 0;
+}
+
 void audio_play_path(char *soundPath, double position) {
     audio_free_music();
     music = Mix_LoadMUS(soundPath);
     if (music != NULL) {
-        musicDuration = Mix_MusicDuration(music);
+        musicDuration = -1.0;  // Unknown until thread completes
+        strcpy(currentMusicPath, soundPath);
         Mix_PlayMusic(music, 1);
         Mix_SetMusicPosition(position);
+
+        if (durationThreadRunning) {
+            pthread_join(durationThread, NULL);
+            durationThreadRunning = false;
+        }
+
+        strcpy(durationThreadPath, soundPath);
+        durationThreadRunning = true;
+        if (pthread_create(&durationThread, NULL, audio_calculate_duration_thread, NULL) != 0) {
+            durationThreadRunning = false; 
+        }
     } else {
         musicDuration = 0.0;
+        currentMusicPath[0] = '\0';
     }
 }
 
@@ -310,6 +349,13 @@ void video_audio_init(void) {
 
 
 void video_audio_quit(void) {
+    currentMusicPath[0] = '\0';
+
+    if (durationThreadRunning) {
+        pthread_join(durationThread, NULL);
+        durationThreadRunning = false;
+    }
+
     TTF_Quit();
 
     if (music != NULL) {

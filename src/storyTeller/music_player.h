@@ -43,6 +43,7 @@ static int musicPlayerRepeatMode = MUSICPLAYER_REPEAT_ALL;
 static int musicPlayerDrawInterfaceTime = 0;
 static long int musicPlayerScreenUpdateTime = 0;
 static long int musicPlayerLastActivity = 0;
+static long int musicPlayerMusicLoadTime = 0;
 
 static void (*callback_musicplayer_autoplay)(void);
 
@@ -135,12 +136,22 @@ void musicplayer_interfaceplayer_drawInterface(bool forceDraw) {
 
     sprintf(writeTitle, "%s. %s", track, title);
     sprintf(writeArtist, "%s - %s", artist, album);
-    sprintf(writeDuration, "%i:%02i", musicDuration / 60, musicDuration % 60);
+    if (musicDuration > 0) {
+        sprintf(writeDuration, "%i:%02i", musicDuration / 60, musicDuration % 60);
+    } else if (get_time() - musicPlayerMusicLoadTime > 1) {
+        // Only show "-:--" after 1 second of waiting (avoids flicker for short songs)
+        sprintf(writeDuration, "-:--");
+    } else {
+        // Within first second, show empty to avoid flicker
+        writeDuration[0] = '\0';
+    }
     sprintf(writeTime, "%i:%02i", musicPosition / 60, musicPosition % 60);
     sprintf(fileImageName, "%s.png", imageName);
 
     video_screenBlack();
-    video_drawRectangle(185, 258, (int) ((double) musicPosition * 422.0 / (double) musicDuration), 12, 255, 186, 0);
+    if (musicDuration > 0) {
+        video_drawRectangle(185, 258, (int) ((double) musicPosition * 422.0 / (double) musicDuration), 12, 255, 186, 0);
+    }
     video_screenAddImage(SYSTEM_RESOURCES, "musicPlayer.png", 0, 0, 640);
     video_screenAddImage(MUSICPLAYER_RESOURCES, fileImageName, 24, 176, 128);
     video_screenWriteFont(writeTitle, fontBold24, colorWhite, 185, 190, SDL_ALIGN_LEFT);
@@ -244,7 +255,7 @@ void musicplayer_screenUpdate(bool forceDraw) {
 }
 
 bool musicplayer_callCallback(void) {
-    if (callback_musicplayer_autoplay != NULL && audio_getPosition() == audio_getDuration()) {
+    if (callback_musicplayer_autoplay != NULL && audio_isFinished()) {
         callback_musicplayer_autoplay();
         return true;
     }
@@ -287,6 +298,7 @@ void musicplayer_load(void) {
     bool isPaused = Mix_PlayingMusic() == 1 && Mix_PausedMusic() == 1;
 
     audio_play(MUSICPLAYER_RESOURCES, musicPlayerTracksList[musicPlayerTrackIndex], musicPlayerTrackPosition);
+    musicPlayerMusicLoadTime = get_time();
 
     if (isPaused) {
         Mix_PauseMusic();
@@ -373,7 +385,7 @@ void musicplayer_rewind(int time) {
     musicPlayerTrackPosition = audio_getPosition() + (double) time;
     if (musicPlayerTrackPosition < 0) {
         musicPlayerTrackPosition = 0.0;
-    } else if (musicPlayerTrackPosition >= musicDuration) {
+    } else if (musicDuration > 0 && musicPlayerTrackPosition >= musicDuration) {
         callback_musicplayer_autoplay();
         return;
     }
