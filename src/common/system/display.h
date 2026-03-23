@@ -11,11 +11,11 @@
 #include "utils/file.h"
 #include "utils/log.h"
 
-#define DISPLAY_WIDTH 640
-#define DISPLAY_HEIGHT 480
-
 #define display_on() display_setScreen(true)
 #define display_off() display_setScreen(false)
+
+static int DISPLAY_WIDTH = 640;
+static int DISPLAY_HEIGHT = 480;
 
 static uint32_t *fb_addr;
 static int fb_fd;
@@ -31,8 +31,20 @@ void display_init(void)
     // Open and mmap FB
     fb_fd = open("/dev/fb0", O_RDWR);
     ioctl(fb_fd, FBIOGET_FSCREENINFO, &finfo);
-    fb_addr = (uint32_t *)mmap(0, finfo.smem_len, PROT_READ | PROT_WRITE,
-                               MAP_SHARED, fb_fd, 0);
+    fb_addr = (uint32_t *)mmap(0, finfo.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, fb_fd, 0);
+}
+
+//
+//    Get physical screen resolution
+//
+void display_getResolution(void)
+{
+    FILE *file = fopen("/tmp/screen_resolution", "r");
+    if (file == NULL) {
+        return;
+    }
+    fscanf(file, "%dx%d", &DISPLAY_WIDTH, &DISPLAY_HEIGHT);
+    fclose(file);
 }
 
 //

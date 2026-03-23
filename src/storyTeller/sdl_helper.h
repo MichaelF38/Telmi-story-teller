@@ -10,7 +10,9 @@
 #include "SDL2/SDL_ttf.h"
 #include "SDL2/SDL_gfx.h"
 
+#include "system/display.h"
 #include "utils/str.h"
+
 #include "./logs_helper.h"
 #include "./app_battery.h"
 #include "./app_lock.h"
@@ -347,6 +349,8 @@ void audio_play(const char *dir, const char *name, double position) {
 }
 
 void video_audio_init(void) {
+    display_getResolution();
+
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
@@ -358,7 +362,7 @@ void video_audio_init(void) {
     Mix_Volume(-1, MIX_MAX_VOLUME);
     Mix_VolumeMusic(MIX_MAX_VOLUME);
 
-    window = SDL_CreateWindow("main", 0, 0, 640, 480, SDL_WINDOW_SHOWN);
+    window = SDL_CreateWindow("main", 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, SDL_WINDOW_SHOWN);
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     screen = SDL_CreateRGBSurface(0, 640, 480, 32, 0, 0, 0, 0);
     appSurface = SDL_CreateRGBSurface(0, screen->w, screen->h, 32, 0, 0, 0, 0);

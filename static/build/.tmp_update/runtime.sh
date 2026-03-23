@@ -11,6 +11,7 @@ logfile=$(basename "$0" .sh)
 
 MODEL_MM=283
 MODEL_MMP=354
+screen_resolution="640x480"
 
 main() {
     # Set model ID
@@ -166,6 +167,8 @@ init_system() {
     echo 800 > /sys/class/pwm/pwmchip0/pwm0/period
     echo $brightness_raw > /sys/class/pwm/pwmchip0/pwm0/duty_cycle
     echo 1 > /sys/class/pwm/pwmchip0/pwm0/enable
+
+    get_screen_resolution
 }
 
 load_settings() {
@@ -195,6 +198,28 @@ load_settings() {
             mv -f temp /mnt/SDCARD/system.json
         fi
     fi
+}
+
+get_screen_resolution() {
+    max_attempts=10
+    attempt=0
+
+    while [ "$attempt" -lt "$max_attempts" ]; do
+        screen_resolution=$(grep 'Current TimingWidth=' /proc/mi_modules/fb/mi_fb0 | sed 's/Current TimingWidth=\([0-9]*\),TimingWidth=\([0-9]*\),.*/\1x\2/')
+        if [ -n "$screen_resolution" ]; then
+            break
+        fi
+        attempt=$((attempt + 1))
+        sleep 0.5
+    done
+
+    if [ "$screen_resolution" = "752x560" ] && [ "$(/etc/fw_printenv miyoo_version | cut -d'=' -f2)" -ge "202310271401" ]; then
+        touch /tmp/new_res_available
+    else
+        screen_resolution="640x480"
+    fi
+
+    echo -n "$screen_resolution" > /tmp/screen_resolution
 }
 
 update_time() {
