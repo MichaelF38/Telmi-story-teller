@@ -40,11 +40,10 @@ bool keyinput_isValid(void) {
 }
 
 int main(int argc, char *argv[]) {
-
     srand(time(NULL));
+    display_init();
     video_audio_init();
     settings_init();
-    display_init();
     parameters_init();
     settings_setVolume(parameters_getAudioVolumeStartup(), true);
     settings_setBrightness(parameters_getScreenBrightnessStartup(), true, false);

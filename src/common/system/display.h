@@ -26,19 +26,22 @@ static uint32_t stride, bpp;
 static uint8_t *savebuf;
 static bool display_enabled = true;
 
-void display_init(void)
-{
+void display_init(void) {
     // Open and mmap FB
     fb_fd = open("/dev/fb0", O_RDWR);
+
     ioctl(fb_fd, FBIOGET_FSCREENINFO, &finfo);
-    fb_addr = (uint32_t *)mmap(0, finfo.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, fb_fd, 0);
+    fb_addr = (uint32_t *) mmap(0, finfo.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, fb_fd, 0);
+
+    ioctl(fb_fd, FBIOGET_VSCREENINFO, &vinfo);
+    DISPLAY_WIDTH = vinfo.xres;
+    DISPLAY_HEIGHT = vinfo.yres;
 }
 
 //
 //    Get physical screen resolution
 //
-void display_getResolution(void)
-{
+void display_getResolution(void) {
     FILE *file = fopen("/tmp/screen_resolution", "r");
     if (file == NULL) {
         return;
@@ -50,15 +53,14 @@ void display_getResolution(void)
 //
 //    Save/Clear Display area
 //
-void display_save(void)
-{
+void display_save(void) {
     stride = finfo.line_length;
     ioctl(fb_fd, FBIOGET_VSCREENINFO, &vinfo);
     bpp = vinfo.bits_per_pixel / 8; // byte per pixel
-    fbofs = (uint8_t *)fb_addr + (vinfo.yoffset * stride);
+    fbofs = (uint8_t *) fb_addr + (vinfo.yoffset * stride);
 
     // Save display area and clear
-    if ((savebuf = (uint8_t *)malloc(DISPLAY_WIDTH * bpp * DISPLAY_HEIGHT))) {
+    if ((savebuf = (uint8_t *) malloc(DISPLAY_WIDTH * bpp * DISPLAY_HEIGHT))) {
         uint32_t i, ofss, ofsd;
         ofss = ofsd = 0;
         for (i = DISPLAY_HEIGHT; i > 0;
@@ -72,8 +74,7 @@ void display_save(void)
 //
 //    Restore Display area
 //
-void display_restore(void)
-{
+void display_restore(void) {
     // Restore display area
     if (savebuf) {
         uint32_t i, ofss, ofsd;
@@ -87,8 +88,7 @@ void display_restore(void)
     }
 }
 
-void display_reset(void)
-{
+void display_reset(void) {
     ioctl(fb_fd, FBIOGET_VSCREENINFO, &vinfo);
     vinfo.yoffset = 0;
     memset(fb_addr, 0, finfo.smem_len);
@@ -98,8 +98,7 @@ void display_reset(void)
 //
 //    Screen On/Off
 //
-void display_setScreen(bool enabled)
-{
+void display_setScreen(bool enabled) {
     // export gpio4, direction: out
     file_write(GPIO_DIR1 "export", "4", 1);
     file_write(GPIO_DIR2 "gpio4/direction", "out", 3);
@@ -116,8 +115,7 @@ void display_setScreen(bool enabled)
         file_write(PWM_DIR "pwm0/enable", "0", 1);
         file_write(PWM_DIR "pwm0/enable", "1", 1);
         display_restore();
-    }
-    else {
+    } else {
         display_save();
     }
 
@@ -129,16 +127,14 @@ void display_toggle(void) { display_setScreen(!display_enabled); }
 //
 //    Set Brightness (Raw)
 //
-void display_setBrightnessRaw(uint32_t value)
-{
+void display_setBrightnessRaw(uint32_t value) {
     FILE *fp;
     file_put_sync(fp, PWM_DIR "pwm0/duty_cycle", "%u", value);
     printf_debug("Raw brightness: %d\n", value);
 }
 
 // Set display brightness (0 - 10)
-void display_setBrightness(uint32_t value)
-{
+void display_setBrightness(uint32_t value) {
     // Linear curve
     // int value_raw = (value == 0) ? 3 : (value * 10);
 
@@ -151,8 +147,7 @@ void display_setBrightness(uint32_t value)
 //
 //    Draw frame, fixed 640x480x32bpp for now
 //
-void display_drawFrame(uint32_t color)
-{
+void display_drawFrame(uint32_t color) {
     uint32_t *ofs = fb_addr;
     uint32_t i;
     for (i = 0; i < 640; i++) {
@@ -181,8 +176,7 @@ void display_drawFrame(uint32_t color)
 //    Draw a battery icon
 //
 void display_drawBatteryIcon(uint32_t color, int x, int y, int level,
-                             uint32_t fillColor)
-{
+                             uint32_t fillColor) {
     uint32_t *ofs = fb_addr;
     int i, j;
 
@@ -212,8 +206,7 @@ void display_drawBatteryIcon(uint32_t color, int x, int y, int level,
     }
 }
 
-void display_free(void)
-{
+void display_free(void) {
     if (savebuf)
         free(savebuf);
     if (fb_addr)
