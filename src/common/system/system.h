@@ -39,6 +39,10 @@ void system_shutdown(void)
  */
 void system_powersave(bool enabled)
 {
+#ifdef PLATFORM_HOST
+    (void)enabled;
+    return;
+#else
     static uint32_t saved_min_freq;
     static char saved_governor[16];
     FILE *fp;
@@ -56,6 +60,7 @@ void system_powersave(bool enabled)
         file_put(fp, CPU_SCALING_MIN_FREQ, "%u", saved_min_freq);
         file_put(fp, CPU_SCALING_GOVERNOR, "%s", saved_governor);
     }
+#endif
 }
 
 #endif // SYSTEM_H__

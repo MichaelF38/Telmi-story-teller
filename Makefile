@@ -44,7 +44,7 @@ include ./src/common/commands.mk
 
 ###########################################################
 
-.PHONY: all version core apps external release clean deepclean git-clean with-toolchain patch lib test
+.PHONY: all version core apps external release clean deepclean git-clean with-toolchain patch lib test host host-setup host-run host-clean
 
 all: dist
 
@@ -146,3 +146,53 @@ static-analysis:
 
 format:
 	@find ./src -regex '.*\.\(c\|h\|cpp\|hpp\)' -exec clang-format -style=file -i {} \;
+
+###########################################################
+# Host (Linux PC) build & run
+# Builds storyTeller against the system SDL2 libraries so the
+# UI can be tested directly on Linux. Hardware-only code paths
+# (framebuffer, GPIO, /dev/mi_ao, rumble) are stubbed under
+# the PLATFORM_HOST define.
+#
+# Key mapping (matches Miyoo Mini layout):
+#   D-pad     : Arrow keys
+#   A / B     : Space / Left Ctrl
+#   X / Y     : Left Shift / Left Alt
+#   L1 / R1   : E / T
+#   L2 / R2   : Tab / Backspace
+#   Start     : Enter
+#   Select    : Right Ctrl
+#   Menu      : Escape
+#   Vol -/+   : PageDown / PageUp
+#   Power     : End  (long-press > 1s exits)
+###########################################################
+
+HOST_BUILD_DIR := $(ROOT_DIR)/build_host
+
+host-setup: $(CACHE)/.setup
+	@$(ECHO) $(PRINT_RECIPE)
+	@mkdir -p $(HOST_BUILD_DIR)
+	@if [ ! -e /mnt/SDCARD ] || [ "$$(readlink -f /mnt/SDCARD)" != "$(BUILD_DIR)" ]; then \
+		echo "==> Linking /mnt/SDCARD -> $(BUILD_DIR) (requires sudo)"; \
+		sudo mkdir -p /mnt; \
+		sudo rm -rf /mnt/SDCARD; \
+		sudo ln -s $(BUILD_DIR) /mnt/SDCARD; \
+	fi
+	@$(ECHO) $(PRINT_DONE)
+
+host: host-setup
+	@$(ECHO) $(PRINT_RECIPE)
+	@find $(SRC_DIR) -type f -name '*.o' -delete
+	@cd $(SRC_DIR)/storyTeller && \
+		BUILD_DIR=$(HOST_BUILD_DIR) PLATFORM=host CROSS_COMPILE= DEBUG=1 \
+		$(MAKE) -e
+	@echo ""
+	@echo "==> Built: $(HOST_BUILD_DIR)/storyTeller"
+	@echo "    Run with: make host-run"
+
+host-run: host
+	@cd $(HOST_BUILD_DIR) && ./storyTeller
+
+host-clean:
+	@rm -rf $(HOST_BUILD_DIR)
+	@find $(SRC_DIR) -type f -name '*.o' -delete

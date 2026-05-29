@@ -18,6 +18,10 @@
 // Set volume output between 0 and 60, use `add` for boosting
 int setVolumeRaw(int value, int add)
 {
+#ifdef PLATFORM_HOST
+    (void)value; (void)add;
+    return 0;
+#else
     int fd;
 
     if ((fd = open("/dev/mi_ao", O_RDWR)) < 0)
@@ -60,6 +64,7 @@ int setVolumeRaw(int value, int add)
 
     close(fd);
     return value;
+#endif
 }
 
 // Increments between 0 and 25

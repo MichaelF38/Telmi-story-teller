@@ -27,6 +27,13 @@ static uint8_t *savebuf;
 static bool display_enabled = true;
 
 void display_init(void) {
+#ifdef PLATFORM_HOST
+    // No framebuffer on host; rely on default 640x480 and SDL window.
+    DISPLAY_WIDTH = 640;
+    DISPLAY_HEIGHT = 480;
+    fb_fd = -1;
+    fb_addr = NULL;
+#else
     // Open and mmap FB
     fb_fd = open("/dev/fb0", O_RDWR);
 
@@ -36,6 +43,7 @@ void display_init(void) {
     ioctl(fb_fd, FBIOGET_VSCREENINFO, &vinfo);
     DISPLAY_WIDTH = vinfo.xres;
     DISPLAY_HEIGHT = vinfo.yres;
+#endif
 }
 
 //
@@ -54,6 +62,9 @@ void display_getResolution(void) {
 //    Save/Clear Display area
 //
 void display_save(void) {
+#ifdef PLATFORM_HOST
+    return;
+#else
     stride = finfo.line_length;
     ioctl(fb_fd, FBIOGET_VSCREENINFO, &vinfo);
     bpp = vinfo.bits_per_pixel / 8; // byte per pixel
@@ -69,12 +80,16 @@ void display_save(void) {
             memset(fbofs + ofss, 0, DISPLAY_WIDTH * bpp);
         }
     }
+#endif
 }
 
 //
 //    Restore Display area
 //
 void display_restore(void) {
+#ifdef PLATFORM_HOST
+    return;
+#else
     // Restore display area
     if (savebuf) {
         uint32_t i, ofss, ofsd;
@@ -86,19 +101,25 @@ void display_restore(void) {
         free(savebuf);
         savebuf = NULL;
     }
+#endif
 }
 
 void display_reset(void) {
+#ifdef PLATFORM_HOST
+    return;
+#else
     ioctl(fb_fd, FBIOGET_VSCREENINFO, &vinfo);
     vinfo.yoffset = 0;
     memset(fb_addr, 0, finfo.smem_len);
     ioctl(fb_fd, FBIOPUT_VSCREENINFO, &vinfo);
+#endif
 }
 
 //
 //    Screen On/Off
 //
 void display_setScreen(bool enabled) {
+#ifndef PLATFORM_HOST
     // export gpio4, direction: out
     file_write(GPIO_DIR1 "export", "4", 1);
     file_write(GPIO_DIR2 "gpio4/direction", "out", 3);
@@ -118,7 +139,7 @@ void display_setScreen(bool enabled) {
     } else {
         display_save();
     }
-
+#endif
     display_enabled = enabled;
 }
 
@@ -128,9 +149,13 @@ void display_toggle(void) { display_setScreen(!display_enabled); }
 //    Set Brightness (Raw)
 //
 void display_setBrightnessRaw(uint32_t value) {
+#ifdef PLATFORM_HOST
+    (void)value;
+#else
     FILE *fp;
     file_put_sync(fp, PWM_DIR "pwm0/duty_cycle", "%u", value);
     printf_debug("Raw brightness: %d\n", value);
+#endif
 }
 
 // Set display brightness (0 - 10)
@@ -148,6 +173,10 @@ void display_setBrightness(uint32_t value) {
 //    Draw frame, fixed 640x480x32bpp for now
 //
 void display_drawFrame(uint32_t color) {
+#ifdef PLATFORM_HOST
+    (void)color;
+    return;
+#else
     uint32_t *ofs = fb_addr;
     uint32_t i;
     for (i = 0; i < 640; i++) {
@@ -170,6 +199,7 @@ void display_drawFrame(uint32_t color) {
         ofs[0] = color;
         ofs[1] = color;
     }
+#endif
 }
 
 //
@@ -177,6 +207,10 @@ void display_drawFrame(uint32_t color) {
 //
 void display_drawBatteryIcon(uint32_t color, int x, int y, int level,
                              uint32_t fillColor) {
+#ifdef PLATFORM_HOST
+    (void)color; (void)x; (void)y; (void)level; (void)fillColor;
+    return;
+#else
     uint32_t *ofs = fb_addr;
     int i, j;
 
@@ -204,15 +238,20 @@ void display_drawBatteryIcon(uint32_t color, int x, int y, int level,
             ofs[i + j * 640] = color;
         }
     }
+#endif
 }
 
 void display_free(void) {
+#ifdef PLATFORM_HOST
+    return;
+#else
     if (savebuf)
         free(savebuf);
     if (fb_addr)
         munmap(fb_addr, finfo.smem_len);
     if (fb_fd > 0)
         close(fb_fd);
+#endif
 }
 
 #endif // DISPLAY_H__

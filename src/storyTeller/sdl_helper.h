@@ -364,7 +364,14 @@ void video_audio_init(void) {
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     screen = SDL_CreateRGBSurface(0, 640, 480, 32, 0, 0, 0, 0);
     appSurface = SDL_CreateRGBSurface(0, screen->w, screen->h, 32, 0, 0, 0, 0);
+#ifdef PLATFORM_HOST
+    // `screen` is 32bpp ARGB8888 (default masks). The Miyoo build uses an
+    // RGB565 texture which only works because of the hardware's framebuffer
+    // quirks; on a desktop GPU it garbles colors and crops each row.
+    texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, screen->w, screen->h);
+#else
     texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB565, SDL_TEXTUREACCESS_STREAMING, screen->w, screen->h);
+#endif
 
     fontBold24 = TTF_OpenFont(FALLBACK_FONT_BOLD, 24);
     fontBold20 = TTF_OpenFont(FALLBACK_FONT_BOLD, 20);

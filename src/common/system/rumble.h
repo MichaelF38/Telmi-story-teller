@@ -18,9 +18,14 @@ static int short_timings[] = {0, 50, 100, 150};
 
 void rumble(bool enabled)
 {
+#ifdef PLATFORM_HOST
+    (void)enabled;
+    return;
+#else
     file_write("/sys/class/gpio/export", "48", 2);
     file_write("/sys/class/gpio/gpio48/direction", "out", 3);
     file_write("/sys/class/gpio/gpio48/value", enabled ? "0" : "1", 1);
+#endif
 }
 
 /**

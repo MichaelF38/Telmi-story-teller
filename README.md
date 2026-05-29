@@ -36,3 +36,47 @@ Then plug SD card of Telmi OS on your computer, it will be reconized by Telmi Sy
 
 Tu parles français et tu veux discuter avec moi ? Demander de l'aide ? Poser des questions ?
 Rendez vous sur le discord de [Telmi](https://discord.gg/ZTA5FyERbg).
+
+# Local host build (Linux PC)
+
+For testing the UI directly on Linux (no Miyoo Mini Plus required), a host build
+is provided. It links against the system SDL2 libraries and stubs out the
+hardware-only code paths (framebuffer, GPIO, `/dev/mi_ao`, rumble). Input is
+read from the SDL window via the keyboard.
+
+Install dependencies (Debian/Ubuntu):
+
+```bash
+sudo apt install build-essential pkg-config \
+    libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev \
+    libsdl2-mixer-dev libsdl2-gfx-dev
+```
+
+Build and run:
+
+```bash
+make host        # builds build_host/storyTeller, creates /mnt/SDCARD symlink (sudo)
+make host-run    # runs it
+```
+
+`make host-setup` symlinks `/mnt/SDCARD` to the local `build/` directory so the
+hard-coded resource paths work. Drop your `Stories/` and `Music/` content into
+`build/Stories` and `build/Music` (which are exposed as `/mnt/SDCARD/Stories`
+and `/mnt/SDCARD/Music`).
+
+Keyboard mapping (matches the Miyoo Mini layout):
+
+| Miyoo button | Key            |
+| ------------ | -------------- |
+| D-pad        | Arrow keys     |
+| A / B        | Space / L-Ctrl |
+| X / Y        | L-Shift / L-Alt|
+| L1 / R1      | E / T          |
+| L2 / R2      | Tab / Backspace|
+| Start        | Enter          |
+| Select       | R-Ctrl         |
+| Menu         | Escape         |
+| Volume -/+   | PageDn / PageUp|
+| Power        | End (long-press > 1s exits) |
+
+Clean the host build with `make host-clean`.
