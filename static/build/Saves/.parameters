@@ -10,5 +10,8 @@
   "storyDisableNightMode": false,
   "storyDisableTimeline": false,
   "musicDisableRepeatModes": false,
+  "parentalLockEnabled": false,
+  "parentalLockCode": "0000",
+  "dailyUsageLimitMinutes": 0,
   "bootSplashscreen": ""
 }

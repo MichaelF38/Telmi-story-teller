@@ -6,6 +6,7 @@
 /design/
 /src/**/*.log
 /build/
+/build_host/
 /build_test/
 /release/
 /dist/

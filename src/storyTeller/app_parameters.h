@@ -1,6 +1,7 @@
 #ifndef STORYTELLER_APP_PARAMETERS__
 #define STORYTELLER_APP_PARAMETERS__
 
+#include <string.h>
 #include "utils/json.h"
 
 static double app_parameters_audioVolumeStartup = 0.3;
@@ -16,6 +17,9 @@ static bool app_parameters_storyDisplayTiles = false;
 static bool app_parameters_storyDisableNightMode = false;
 static bool app_parameters_storyDisableTimeline = false;
 static bool app_parameters_musicDisableRepeatModes = false;
+static bool app_parameters_parentalLockEnabled = false;
+static char app_parameters_parentalLockCode[5] = "0000";
+static int  app_parameters_dailyUsageLimitMinutes = 0; // 0 = unlimited
 
 #define APP_PARAMETERS_PATH "/mnt/SDCARD/Saves/.parameters"
 
@@ -79,6 +83,84 @@ bool parameters_getMusicDisableRepeatModes() {
     return app_parameters_musicDisableRepeatModes;
 }
 
+bool parameters_getParentalLockEnabled(void) {
+    return app_parameters_parentalLockEnabled;
+}
+
+const char *parameters_getParentalLockCode(void) {
+    return app_parameters_parentalLockCode;
+}
+
+int parameters_getDailyUsageLimitMinutes(void) {
+    return app_parameters_dailyUsageLimitMinutes;
+}
+
+void parameters_setAudioVolumeMaxRaw(int raw) {
+    if (raw < 1) raw = 1;
+    if (raw > (int)app_parameters_systemAudioVolumeMax) raw = (int)app_parameters_systemAudioVolumeMax;
+    app_parameters_audioVolumeMax = (double)raw / app_parameters_systemAudioVolumeMax;
+}
+
+void parameters_setScreenBrightnessMaxRaw(int raw) {
+    if (raw < 1) raw = 1;
+    if (raw > (int)app_parameters_systemScreenBrightnessMax) raw = (int)app_parameters_systemScreenBrightnessMax;
+    app_parameters_screenBrightnessMax = (double)raw / app_parameters_systemScreenBrightnessMax;
+}
+
+void parameters_setParentalLockEnabled(bool enabled) {
+    app_parameters_parentalLockEnabled = enabled;
+}
+
+void parameters_setParentalLockCode(const char *code) {
+    if (code == NULL) return;
+    strncpy(app_parameters_parentalLockCode, code, 4);
+    app_parameters_parentalLockCode[4] = '\0';
+}
+
+void parameters_setDailyUsageLimitMinutes(int minutes) {
+    if (minutes < 0) minutes = 0;
+    if (minutes > 1440) minutes = 1440;
+    app_parameters_dailyUsageLimitMinutes = minutes;
+}
+
+static void parameters_jsonReplaceNumber(cJSON *root, const char *key, double value) {
+    cJSON *item = cJSON_GetObjectItem(root, key);
+    if (item) {
+        cJSON_DeleteItemFromObject(root, key);
+    }
+    cJSON_AddNumberToObject(root, key, value);
+}
+
+static void parameters_jsonReplaceBool(cJSON *root, const char *key, bool value) {
+    cJSON *item = cJSON_GetObjectItem(root, key);
+    if (item) {
+        cJSON_DeleteItemFromObject(root, key);
+    }
+    cJSON_AddBoolToObject(root, key, value);
+}
+
+static void parameters_jsonReplaceString(cJSON *root, const char *key, const char *value) {
+    cJSON *item = cJSON_GetObjectItem(root, key);
+    if (item) {
+        cJSON_DeleteItemFromObject(root, key);
+    }
+    cJSON_AddStringToObject(root, key, value);
+}
+
+void parameters_save(void) {
+    cJSON *root = json_load(APP_PARAMETERS_PATH);
+    if (root == NULL) {
+        root = cJSON_CreateObject();
+    }
+    parameters_jsonReplaceNumber(root, "audioVolumeMax", app_parameters_audioVolumeMax);
+    parameters_jsonReplaceNumber(root, "screenBrightnessMax", app_parameters_screenBrightnessMax);
+    parameters_jsonReplaceBool(root, "parentalLockEnabled", app_parameters_parentalLockEnabled);
+    parameters_jsonReplaceString(root, "parentalLockCode", app_parameters_parentalLockCode);
+    parameters_jsonReplaceNumber(root, "dailyUsageLimitMinutes", app_parameters_dailyUsageLimitMinutes);
+    json_save(root, APP_PARAMETERS_PATH);
+    cJSON_Delete(root);
+}
+
 void parameters_init(void) {
     cJSON *parameters = json_load(APP_PARAMETERS_PATH);
     if (parameters != NULL) {
@@ -101,6 +183,21 @@ void parameters_init(void) {
         if (!cJSON_IsNull(cJSON_GetObjectItem(parameters, "musicDisableRepeatModes"))) {
             json_getBool(parameters, "musicDisableRepeatModes", &app_parameters_musicDisableRepeatModes);
         }
+        if (!cJSON_IsNull(cJSON_GetObjectItem(parameters, "parentalLockEnabled"))) {
+            json_getBool(parameters, "parentalLockEnabled", &app_parameters_parentalLockEnabled);
+        }
+        cJSON *codeItem = cJSON_GetObjectItem(parameters, "parentalLockCode");
+        if (codeItem && cJSON_IsString(codeItem)) {
+            const char *s = cJSON_GetStringValue(codeItem);
+            int n = 0;
+            for (int i = 0; i < 4 && s[i] >= '0' && s[i] <= '9'; ++i) n++;
+            if (n == 4) {
+                memcpy(app_parameters_parentalLockCode, s, 4);
+                app_parameters_parentalLockCode[4] = '\0';
+            }
+        }
+        json_getInt(parameters, "dailyUsageLimitMinutes", &app_parameters_dailyUsageLimitMinutes);
+        cJSON_Delete(parameters);
     }
 }
 

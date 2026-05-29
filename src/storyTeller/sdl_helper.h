@@ -19,6 +19,17 @@
 #include "./app_parameters.h"
 #include "./app_volume.h"
 #include "./app_brightness.h"
+#include "./app_sleep_timer.h"
+#include "./app_usage_tracker.h"
+
+// Forward declarations for overlays (defined in their respective headers,
+// included at the bottom of this file after all function definitions).
+static bool settingsmenu_isOpen(void);
+static void settingsmenu_draw(void);
+static bool codeentry_isOpen(void);
+static void codeentry_draw(void);
+static bool limit_overlay_isActive(void);
+static void limit_overlay_draw(void);
 
 #define SYSTEM_RESOURCES "/mnt/SDCARD/.tmp_update/res/"
 
@@ -148,7 +159,8 @@ void video_screenAddImage(const char *dir, char *name, int x, int y, int width) 
 void video_screenWriteFont(const char *text, TTF_Font *font, SDL_Color color, int x, int y, int align) {
     SDL_Surface *sdlText = TTF_RenderUTF8_Blended(font, text, color);
     if (sdlText != NULL) {
-        SDL_BlitSurface(sdlText, NULL, appSurface, &(SDL_Rect) {x - (sdlText->w / align), y});
+        int blit_x = (align > 0) ? x - (sdlText->w / align) : x;
+        SDL_BlitSurface(sdlText, NULL, appSurface, &(SDL_Rect) {blit_x, y});
         SDL_FreeSurface(sdlText);
     }
 }
@@ -173,6 +185,45 @@ void video_showBattery(void) {
     char strBatteryPercent[6];
     sprintf(strBatteryPercent, "%i%%", batteryPercentage);
     video_screenWriteFont(strBatteryPercent, fontRegular16, colorBattery, 555, 2, SDL_ALIGN_CENTER);
+}
+
+// Horizontal progress bar in the top-left showing today's accumulated
+// usage vs the daily limit. Hidden when the limit is Off.
+void video_showUsageBar(void) {
+    int limit = parameters_getDailyUsageLimitMinutes();
+    if (limit <= 0) return;
+
+    long int limitSec = (long int)limit * 60;
+    long int sec = usage_getSecondsToday();
+    if (sec < 0) sec = 0;
+    if (sec > limitSec) sec = limitSec;
+
+    int x = 380, y = 8, w = 140, h = 10;
+    int fill = (int)((sec * (long int)(w - 2)) / limitSec);
+    // background slot
+    video_drawRectangle(x, y, w, h, 60, 30, 90);
+    // fill: green -> orange -> red as it nears 100%
+    Uint8 r, g, b = 0;
+    if (sec * 2 < limitSec) {
+        // 0..50%: green to orange
+        long int t = (sec * 510) / limitSec; // 0..255
+        r = (Uint8)t;
+        g = 186;
+    } else {
+        // 50..100%: orange to red
+        long int t = ((sec - limitSec / 2) * 372) / (limitSec - limitSec / 2); // 0..186
+        if (t > 186) t = 186;
+        r = 255;
+        g = (Uint8)(186 - t);
+    }
+    if (fill > 0) {
+        video_drawRectangle(x + 1, y + 1, fill, h - 2, r, g, b);
+    }
+    // white border
+    video_drawRectangle(x,         y,         w, 1, 255, 255, 255);
+    video_drawRectangle(x,         y + h - 1, w, 1, 255, 255, 255);
+    video_drawRectangle(x,         y,         1, h, 255, 255, 255);
+    video_drawRectangle(x + w - 1, y,         1, h, 255, 255, 255);
 }
 
 void video_showBar(void) {
@@ -213,7 +264,33 @@ void video_showAppLock(void) {
 }
 
 void video_applyToVideo(void) {
-    video_showBattery();
+    // Draw settings overlay on top of app content (before blit to screen)
+    if (settingsmenu_isOpen()) {
+        settingsmenu_draw();
+    }
+    if (codeentry_isOpen()) {
+        codeentry_draw();
+    }
+    if (limit_overlay_isActive()) {
+        limit_overlay_draw();
+    }
+
+    // Top-bar indicators (battery, usage, sleep timer) are hidden when
+    // the screen is logically off, e.g. while a story is playing with no
+    // image / after the timeline timed out. They reappear as soon as the
+    // user presses a key (display_setScreen(true)).
+    if (display_enabled) {
+        video_showBattery();
+        video_showUsageBar();
+
+        if (sleeptimer_isActive()) {
+            char countdownStr[16];
+            long int remaining = sleeptimer_getRemainingSeconds();
+            sprintf(countdownStr, "%d:%02d", (int)(remaining / 60), (int)(remaining % 60));
+            video_screenWriteFont(countdownStr, fontBold18, colorOrange, 320, 4, SDL_ALIGN_CENTER);
+        }
+    }
+
     SDL_BlitSurface(appSurface, NULL, screen, NULL);
     video_showAppLock();
     video_showBar();
@@ -411,5 +488,11 @@ void video_audio_quit(void) {
     SDL_DestroyWindow(window);
     SDL_Quit();
 }
+
+// Must be included after all sdl_helper definitions so settingsmenu_draw()
+// can call video_drawRectangle, video_screenWriteFont, etc.
+#include "./app_code_entry.h"
+#include "./app_limit_overlay.h"
+#include "./app_settings_menu.h"
 
 #endif // STORYTELLER_SDL_HELPER__

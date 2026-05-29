@@ -13,6 +13,7 @@
 #define APP_SAVEFILE "/mnt/SDCARD/Saves/.storytellerState"
 
 #include "./sdl_helper.h"
+#include "./app_usage_tracker.h"
 #include "./music_player.h"
 #include "./stories_reader.h"
 
@@ -191,6 +192,13 @@ void app_ok(void) {
                 break;
         }
     } else {
+        // Daily usage limit reached: refuse to open any category and
+        // show a lock overlay on the main screen instead.
+        if (usage_isLimitReached()) {
+            limit_overlay_show();
+            app_refreshScreen();
+            return;
+        }
         appOpened = true;
         switch (appIndex) {
             case APP_STORIES:
@@ -247,7 +255,10 @@ void app_save(void) {
 
 void app_init(void) {
     cJSON *savedState = json_load(APP_SAVEFILE);
-    if (json_getInt(savedState, "app", &appIndex)) {
+    // If the daily limit is already reached, don't auto-resume into a
+    // category — stay on the main screen so the user (or a parent) can
+    // still access the settings menu to change the limit.
+    if (json_getInt(savedState, "app", &appIndex) && !usage_isLimitReached()) {
         app_ok();
     } else {
         app_refreshScreen();
